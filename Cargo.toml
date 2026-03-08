@@ -1,6 +1,6 @@
 [package]
 name = "cfproxy"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Expose localhost services via Cloudflare tunnel with a rich TUI"
 license = "MIT"
