@@ -54,3 +54,17 @@ Key modules in `src/`:
 - **error.rs** — Unified error type and `Result` alias
 
 Integration tests live in `tests/integration.rs`.
+
+## CI/CD
+
+- **CI** (`.github/workflows/ci.yml`): Runs on every push/PR — `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check`. Must pass before merging.
+- **Release** (`.github/workflows/release.yml`): Triggered by pushing a `v*` tag. Builds binaries for 4 targets (macOS x86_64/ARM64, Linux x86_64/ARM64) and creates a GitHub release with the artifacts.
+
+## Release Process
+
+1. Bump `version` in `Cargo.toml`
+2. Commit and push
+3. `git tag v<version> && git push origin v<version>`
+4. Release workflow builds binaries and publishes the GitHub release automatically
+
+Tags cannot be deleted once published (repo rule), so always use a new version number.
