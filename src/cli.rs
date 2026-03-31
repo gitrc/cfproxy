@@ -57,4 +57,9 @@ pub struct Args {
     /// Update the cached cloudflared binary to the latest version
     #[arg(long)]
     pub update: bool,
+
+    /// Only allow requests from these IPs (checked via CF-Connecting-IP header).
+    /// Can be specified multiple times. When set, all other IPs get 403.
+    #[arg(long = "allow-ip", env = "CFPROXY_ALLOW_IP", value_delimiter = ',')]
+    pub allow_ip: Vec<String>,
 }

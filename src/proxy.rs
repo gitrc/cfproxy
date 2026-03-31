@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -17,6 +18,9 @@ use crate::error::Result;
 use crate::event::{HeaderPair, HttpRequest, TunnelEvent, WebSocketFrame, WsDirection, WsOpcode};
 use crate::mock::MockRules;
 
+/// IP allowlist: when non-empty, only listed IPs may access the proxy.
+pub type AllowIps = Arc<HashSet<String>>;
+
 /// Start a local reverse proxy that forwards to `target_port` and logs requests.
 /// Returns the port the proxy is listening on.
 pub async fn start(
@@ -24,10 +28,12 @@ pub async fn start(
     tx: mpsc::Sender<TunnelEvent>,
     auth: Option<(String, String)>,
     mock_rules: MockRules,
+    allow_ips: Vec<String>,
 ) -> Result<u16> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let proxy_port = listener.local_addr()?.port();
     let auth = auth.map(Arc::new);
+    let allow_ips: AllowIps = Arc::new(allow_ips.into_iter().collect());
 
     tokio::spawn(async move {
         loop {
@@ -38,6 +44,7 @@ pub async fn start(
             let tx = tx.clone();
             let auth = auth.clone();
             let mock_rules = mock_rules.clone();
+            let allow_ips = allow_ips.clone();
             let io = TokioIo::new(stream);
 
             tokio::spawn(async move {
@@ -45,7 +52,8 @@ pub async fn start(
                     let tx = tx.clone();
                     let auth = auth.clone();
                     let mock_rules = mock_rules.clone();
-                    handle(req, target_port, tx, auth, mock_rules)
+                    let allow_ips = allow_ips.clone();
+                    handle(req, target_port, tx, auth, mock_rules, allow_ips)
                 });
                 let conn = http1::Builder::new()
                     .serve_connection(io, svc)
@@ -66,6 +74,7 @@ async fn handle(
     tx: mpsc::Sender<TunnelEvent>,
     auth: Option<Arc<(String, String)>>,
     mock_rules: MockRules,
+    allow_ips: AllowIps,
 ) -> std::result::Result<Response<Full<Bytes>>, hyper::Error> {
     let start = Instant::now();
     let method = req.method().to_string();
@@ -80,6 +89,42 @@ async fn handle(
     let country = header_val(req.headers(), "cf-ipcountry");
     let user_agent = header_val(req.headers(), "user-agent");
     let request_headers = collect_headers(req.headers());
+
+    // Check IP allowlist before anything else
+    if !allow_ips.is_empty() {
+        let allowed = remote_ip
+            .as_ref()
+            .map(|ip| allow_ips.contains(ip))
+            .unwrap_or(false);
+        if !allowed {
+            let duration = start.elapsed();
+            let _ = tx
+                .send(TunnelEvent::HttpRequest(HttpRequest {
+                    method,
+                    path,
+                    status: 403,
+                    duration,
+                    remote_ip,
+                    country,
+                    user_agent,
+                    request_headers,
+                    response_headers: Vec::new(),
+                    request_size: 0,
+                    response_size: 0,
+                    request_body: None,
+                    response_body: None,
+                    is_websocket: false,
+                    ws_frames: Vec::new(),
+                    is_mock: false,
+                    timestamp: chrono::Local::now(),
+                }))
+                .await;
+            return Ok(Response::builder()
+                .status(hyper::StatusCode::FORBIDDEN)
+                .body(Full::new(Bytes::from("Forbidden")))
+                .unwrap());
+        }
+    }
 
     // Check Basic Auth before forwarding
     if let Some(ref expected) = auth {

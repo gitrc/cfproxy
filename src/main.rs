@@ -96,7 +96,7 @@ async fn main() -> error::Result<()> {
     }
 
     // Start local reverse proxy to capture HTTP requests
-    let proxy_port = proxy::start(config.port, tx.clone(), config.auth, mock_rules.clone()).await?;
+    let proxy_port = proxy::start(config.port, tx.clone(), config.auth, mock_rules.clone(), config.allow_ips).await?;
     tracing::info!("request logger listening on 127.0.0.1:{}", proxy_port);
 
     let port = config.port;

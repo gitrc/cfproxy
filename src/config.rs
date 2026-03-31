@@ -12,6 +12,7 @@ pub struct Config {
     pub mock_rules: Vec<MockRule>,
     pub host: Option<String>,
     pub quick: bool,
+    pub allow_ips: Vec<String>,
 }
 
 impl Config {
@@ -42,6 +43,7 @@ impl Config {
             mock_rules,
             host: args.host,
             quick: args.quick,
+            allow_ips: args.allow_ip,
         }
     }
 }
@@ -77,6 +79,7 @@ mod tests {
             purge: false,
             doctor: false,
             update: false,
+            allow_ip: Vec::new(),
         };
         let config = Config::from_args(args);
         assert!(!config.auto_download);
